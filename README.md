@@ -208,6 +208,56 @@ python3 test_chat.py
 
 ## Key Design Decisions
 
+## Quick Start — Run Locally
+
+Follow these minimal steps to run the backend, frontend, and tests locally.
+
+1) Create a Python virtual environment and install Python deps
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+2) Recommended environment variables for local development
+
+```bash
+# Use the deterministic simulator for Groq tool-calls (no external key needed)
+export GROQ_FORCE_SIMULATOR=1
+
+# Use a local sqlite DB to avoid needing Postgres
+export DATABASE_URL=sqlite:///./cartright.db
+```
+
+3) Start backend (development)
+
+```bash
+# Run with auto-reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+4) Start frontend (development)
+
+```bash
+cd frontend
+npm install
+npm run dev
+# Vite dev server defaults to http://localhost:5173
+```
+
+5) Run the integration chat demo/test
+
+```bash
+# Uses the simulator by default if GROQ_FORCE_SIMULATOR=1
+GROQ_FORCE_SIMULATOR=1 python3 test_chat.py
+```
+
+Notes:
+- To run a single-host build (build frontend then start backend): `./start.sh`
+- To use real Groq or Razorpay services, set `GROQ_API_KEY`, `RAZORPAY_KEY_ID`, and `RAZORPAY_KEY_SECRET` in your environment or `.env` file.
+
+
 ### 1. **Session ID Always Server-Injected**
 - LLM can never specify which user's cart to modify
 - Prevents agent confusion or malicious tool use

@@ -15,16 +15,21 @@ from app.tools.schemas import (
     ApplyDiscountRequest,
     CheckoutRequest,
     UpsellSuggestRequest,
+    ShowCartRequest,
     ToolCallResult,
     ALLOWED_TOOLS,
     MAX_DISCOUNT_PERCENT,
     ProductSearchResult,
     SearchCatalogResult,
+    CartItemResult,
     AddToCartResult,
     ApplyDiscountResult,
     CheckoutResult,
     UpsellSuggestionResult,
     UpsellSuggestResult,
+    CartViewResult,
+    ShowCatalogRequest,
+    ShowCatalogResult,
 )
 from app.models import Cart, CartItem, Product, Order
 from app.razorpay_client import create_order, RAZORPAY_KEY_ID
@@ -205,6 +210,52 @@ def _upsell_suggest(args: UpsellSuggestRequest, session_id: str, db: Session) ->
     return UpsellSuggestResult(suggestions=suggestions)
 
 
+def _show_catalog(args: ShowCatalogRequest, session_id: str, db: Session) -> ShowCatalogResult:
+    """Return the full product catalog (top results)."""
+    products = db.query(Product).limit(100).all()
+    items = []
+    for p in products:
+        items.append(ProductSearchResult(
+            id=p.id,
+            name=p.name,
+            description=p.description,
+            price=p.price,
+            stock=p.stock,
+        ))
+    return ShowCatalogResult(items=items)
+
+
+def _show_cart(args: ShowCartRequest, session_id: str, db: Session) -> CartViewResult:
+    """Return current cart contents and totals."""
+    cart = _get_or_create_cart(session_id, db)
+
+    items = []
+    for item in cart.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            continue
+        subtotal = product.price * item.quantity
+        items.append(CartItemResult(
+            product_id=product.id,
+            name=product.name,
+            price=product.price,
+            quantity=item.quantity,
+            subtotal=subtotal,
+        ))
+
+    subtotal = _get_cart_total(cart, db)
+    discount_percent = cart.discount_percent or 0
+    discount_amount = (subtotal * discount_percent) / 100.0
+    total = subtotal - discount_amount
+
+    return CartViewResult(
+        items=items,
+        subtotal=subtotal,
+        discount_percent=discount_percent,
+        total=total,
+    )
+
+
 # ============================================================================
 # Main Gate Function
 # ============================================================================
@@ -258,6 +309,14 @@ def run_tool_call(
         elif tool_name == "checkout":
             args = CheckoutRequest(**arguments)  # No required args
             result_data = _checkout(args, session_id, db)
+        
+        elif tool_name == "show_cart":
+            args = ShowCartRequest(**arguments)
+            result_data = _show_cart(args, session_id, db)
+
+        elif tool_name == "show_catalog":
+            args = ShowCatalogRequest(**arguments)
+            result_data = _show_catalog(args, session_id, db)
             
         elif tool_name == "upsell_suggest":
             args = UpsellSuggestRequest(**arguments)  # No required args

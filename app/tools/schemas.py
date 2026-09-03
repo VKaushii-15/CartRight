@@ -130,6 +130,29 @@ class UpsellSuggestResult(BaseModel):
     suggestions: List[UpsellSuggestionResult]
 
 
+class ShowCartRequest(BaseModel):
+    """Request to view current cart contents."""
+    # No parameters — uses session's current cart state
+
+
+class CartViewResult(BaseModel):
+    """Result structure for showing cart contents."""
+    items: List[CartItemResult]
+    subtotal: float
+    discount_percent: int
+    total: float
+
+
+class ShowCatalogRequest(BaseModel):
+    """Request to view the full product catalog."""
+    # No parameters — returns all products (or top N)
+
+
+class ShowCatalogResult(BaseModel):
+    """Result structure for showing the catalog."""
+    items: List[ProductSearchResult]
+
+
 # ============================================================================
 # Constants & Validation Rules
 # ============================================================================
@@ -140,6 +163,8 @@ ALLOWED_TOOLS = {
     "apply_discount",
     "checkout",
     "upsell_suggest",
+    "show_cart",
+    "show_catalog",
 }
 
 MAX_DISCOUNT_PERCENT = 20
@@ -154,4 +179,6 @@ TOOL_MODEL_BY_NAME = {
     "apply_discount": ApplyDiscountRequest,
     "checkout": CheckoutRequest,
     "upsell_suggest": UpsellSuggestRequest,
+    "show_cart": ShowCartRequest,
+    "show_catalog": ShowCatalogRequest,
 }

@@ -21,7 +21,66 @@ export default function ChatAssistant() {
     setLoading(true);
     try {
       const data = await sendChatMessage(sessionId, text);
-      const reply = data.assistant_message || "Done!";
+
+      // If the backend didn't return assistant text, synthesize a helpful
+      // summary from executed tool calls so users see meaningful output.
+      function summarizeTools(tools) {
+        if (!tools || tools.length === 0) return "Done!";
+        const parts = [];
+        for (const t of tools) {
+            if (t.tool_name === "show_cart") {
+              try {
+                const items = t.result?.items || [];
+                if (items.length === 0) {
+                  parts.push("Your cart is empty");
+                  continue;
+                }
+                const list = items.map(it => `${it.quantity}× ${it.name} (₹${it.price})`).join("; ");
+                parts.push(`Cart: ${list} (subtotal: ₹${t.result?.subtotal || '0'}, total: ₹${t.result?.total || '0'})`);
+                continue;
+              } catch (e) { parts.push("Cart summary"); }
+            }
+              if (t.tool_name === "show_catalog") {
+                try {
+                  const items = t.result?.items || [];
+                  if (items.length === 0) {
+                    parts.push("No products found in catalog");
+                    continue;
+                  }
+                  const list = items.map(it => `${it.id}: ${it.name} — ₹${it.price} (${it.stock} in stock)`).join("; ");
+                  parts.push(`Catalog: ${list}`);
+                  continue;
+                } catch (e) { parts.push("Catalog summary"); }
+              }
+          if (t.tool_name === "search_catalog") {
+            try {
+              const q = t.arguments?.query || "";
+              const count = t.result?.count ?? null;
+              parts.push(count !== null ? `Found ${count} results for "${q}"` : `Searched for "${q}"`);
+            } catch (e) { parts.push("Searched catalog"); }
+          } else if (t.tool_name === "add_to_cart") {
+            const qty = t.arguments?.quantity ?? t.result?.quantity ?? 1;
+            const pid = t.arguments?.product_id ?? t.result?.product_id;
+            const total = t.result?.cart_total;
+            parts.push(`Added ${qty} × product ${pid} to cart${total ? ` (cart total: ₹${total})` : ""}`);
+          } else if (t.tool_name === "apply_discount") {
+            const pct = t.arguments?.discount_percent ?? t.result?.discount_percent;
+            const cartTotal = t.result?.cart_total;
+            parts.push(`Applied ${pct}% discount${cartTotal ? ` (new total: ₹${cartTotal})` : ""}`);
+          } else if (t.tool_name === "checkout") {
+            const oid = t.result?.razorpay_order_id || t.result?.order_id;
+            const amt = t.result?.amount;
+            parts.push(oid ? `Checkout: order ${oid}${amt ? ` (₹${amt})` : ""}` : `Checkout completed`);
+          } else if (t.tool_name === "upsell_suggest") {
+            parts.push("Suggested related products");
+          } else {
+            parts.push(`${t.tool_name} → ${t.status}`);
+          }
+        }
+        return parts.join("; ");
+      }
+
+      const reply = data.assistant_message || summarizeTools(data.tool_calls_executed);
       setMessages(m => [...m, { role: "assistant", content: reply, tools: data.tool_calls_executed }]);
     } catch (e) {
       const detail = e?.response?.data?.detail || e?.message || "Unknown error";
