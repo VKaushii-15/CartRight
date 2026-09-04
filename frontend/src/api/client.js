@@ -36,6 +36,16 @@ export async function checkout(sessionId) {
   return res.data;
 }
 
+export async function removeFromCart(sessionId, productId) {
+  const res = await api.post(`/cart/${sessionId}/remove/${productId}`);
+  return res.data;
+}
+
+export async function clearCart(sessionId) {
+  const res = await api.post(`/cart/${sessionId}/clear`);
+  return res.data;
+}
+
 export async function sendChatMessage(sessionId, message) {
   const res = await api.post(`/chat/${sessionId}`, { message });
   return res.data;

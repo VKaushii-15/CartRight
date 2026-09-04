@@ -4,23 +4,36 @@ import { sendChatMessage } from "../api/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+const INITIAL_MESSAGE = { role: "assistant", content: "Hi! I'm your shopping assistant 🛍️\nTell me what you're looking for — I can search products, add items to your cart, apply discounts, and checkout for you!" };
+
+// Module-level cache: survives React unmount/remount when navigating between tabs
+let _sessionId = null;
+let _messages = null;
+
+function getSessionId() {
+  if (!_sessionId) _sessionId = genSessionId();
+  return _sessionId;
+}
+
+function getMessages() {
+  if (_messages) return _messages;
+  const saved = sessionStorage.getItem("chat_history");
+  _messages = saved ? JSON.parse(saved) : [INITIAL_MESSAGE];
+  return _messages;
+}
+
 export default function ChatAssistant() {
-  const [sessionId] = useState(genSessionId);
-  const [messages, setMessages] = useState(() => {
-    const saved = localStorage.getItem(`chat_history_${sessionId}`);
-    if (saved) return JSON.parse(saved);
-    return [
-      { role: "assistant", content: "Hi! I'm your shopping assistant 🛍️\nTell me what you're looking for — I can search products, add items to your cart, apply discounts, and checkout for you!" }
-    ];
-  });
+  const [sessionId] = useState(getSessionId);
+  const [messages, setMessages] = useState(getMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
 
-  useEffect(() => { 
-    localStorage.setItem(`chat_history_${sessionId}`, JSON.stringify(messages));
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" }); 
-  }, [messages, sessionId]);
+  useEffect(() => {
+    _messages = messages;
+    sessionStorage.setItem("chat_history", JSON.stringify(messages));
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function sendMessage() {
     const text = input.trim();
@@ -119,10 +132,10 @@ export default function ChatAssistant() {
     <div className="page-wrap" style={{padding:"24px 20px 0"}}>
       <div className="chat-shell">
         <div className="chat-topbar">
-          <div className="chat-avatar">🤖</div>
+          <div className="chat-avatar">🛒</div>
           <div className="chat-topbar-info">
-            <div className="name">CartRight Assistant</div>
-            <div className="status">● Online</div>
+            <div className="name">Cartright</div>
+            <div className="status">The Conversational Checkout Agent</div>
           </div>
         </div>
 

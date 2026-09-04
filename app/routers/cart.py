@@ -70,6 +70,19 @@ def clear_cart(session_id: str, db: Session = Depends(get_db)):
     return view_cart(session_id, db)
 
 
+@router.post("/{session_id}/remove/{product_id}", response_model=CartOut)
+def remove_from_cart(session_id: str, product_id: int, db: Session = Depends(get_db)):
+    cart = get_or_create_cart(session_id, db)
+    item = db.query(CartItem).filter(
+        CartItem.cart_id == cart.id, CartItem.product_id == product_id
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not in cart")
+    db.delete(item)
+    db.commit()
+    return view_cart(session_id, db)
+
+
 @router.post("/{session_id}/apply_discount", response_model=ToolCallResult)
 def apply_discount(
     session_id: str,

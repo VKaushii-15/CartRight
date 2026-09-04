@@ -17,7 +17,8 @@ export default function App() {
         <Header />
         <main style={{ padding: 20 }}>
           <Routes>
-            <Route path="/" element={<Catalog />} />
+            <Route path="/" element={<ChatAssistant />} />
+            <Route path="/shop" element={<Catalog />} />
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<Checkout />} />

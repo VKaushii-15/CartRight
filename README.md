@@ -117,7 +117,7 @@ npm run dev
 
 ---
 
-## 🤖 Seeing It In Action
+## Seeing It In Action
 
 ### Option 1: REST API Demo Script
 We've included an end-to-end Python demo script that simulates the exact REST timeline (Search -> Add -> Discount -> Checkout) to demonstrate gating, independent of the LLM.

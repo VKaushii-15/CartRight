@@ -14,8 +14,8 @@ export default function Header() {
       <div className="header-inner">
         <Link to="/" className="header-logo">🛒 CartRight</Link>
         <nav className="header-nav">
-          <NavLink to="/" end className={({isActive}) => `nav-link${isActive ? " active" : ""}` }>Shop</NavLink>
-          <NavLink to="/chat"    className={({isActive}) => `nav-link${isActive ? " active" : ""}`}>Assistant</NavLink>
+          <NavLink to="/shop" className={({isActive}) => `nav-link${isActive ? " active" : ""}`}>Shop</NavLink>
+          <NavLink to="/" end className={({isActive}) => `nav-link${isActive ? " active" : ""}`}>Assistant</NavLink>
         </nav>
         <NavLink to="/cart" className={({isActive}) => `cart-badge${isActive ? " active" : ""}`}>
           <span className="dot" />
