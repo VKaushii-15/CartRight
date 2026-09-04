@@ -73,6 +73,17 @@ export default function ChatAssistant() {
             parts.push(oid ? `Checkout: order ${oid}${amt ? ` (₹${amt})` : ""}` : `Checkout completed`);
           } else if (t.tool_name === "upsell_suggest") {
             parts.push("Suggested related products");
+          } else if (t.tool_name === "remove_from_cart") {
+            const pid = t.arguments?.product_id ?? t.result?.product_id;
+            const total = t.result?.cart_total;
+            parts.push(t.status === "ok"
+              ? `Removed product ${pid} from cart${total !== undefined ? ` (cart total: ₹${total})` : ""}`
+              : `Could not remove product ${pid}: ${t.message}`);
+          } else if (t.tool_name === "clear_cart") {
+            const n = t.result?.items_removed;
+            parts.push(t.status === "ok"
+              ? `Cart cleared${n !== undefined ? ` (${n} item${n !== 1 ? "s" : ""} removed)` : ""}`
+              : `Could not clear cart: ${t.message}`);
           } else {
             parts.push(`${t.tool_name} → ${t.status}`);
           }
@@ -132,17 +143,22 @@ export default function ChatAssistant() {
         </div>
 
         <div className="chat-input-area">
-          <textarea
-            className="chat-input"
-            rows={1}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={onKey}
-            placeholder="Ask me to find products, add to cart, apply discount…"
-          />
-          <button className="chat-send" onClick={sendMessage} disabled={loading || !input.trim()} title="Send">
-            ➤
-          </button>
+          <div className="chat-input-wrapper">
+            <textarea
+              className="chat-input"
+              rows={1}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={onKey}
+              placeholder="Ask me to find products, add to cart, apply discount…"
+            />
+            <button className="chat-send" onClick={sendMessage} disabled={loading || !input.trim()} title="Send">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>

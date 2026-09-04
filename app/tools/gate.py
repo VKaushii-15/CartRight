@@ -30,6 +30,10 @@ from app.tools.schemas import (
     CartViewResult,
     ShowCatalogRequest,
     ShowCatalogResult,
+    RemoveFromCartRequest,
+    RemoveFromCartResult,
+    ClearCartRequest,
+    ClearCartResult,
 )
 from app.models import Cart, CartItem, Product, Order
 from app.razorpay_client import create_order, RAZORPAY_KEY_ID
@@ -225,6 +229,40 @@ def _show_catalog(args: ShowCatalogRequest, session_id: str, db: Session) -> Sho
     return ShowCatalogResult(items=items)
 
 
+def _remove_from_cart(args: RemoveFromCartRequest, session_id: str, db: Session) -> RemoveFromCartResult:
+    """Remove a specific product from the cart."""
+    cart = _get_or_create_cart(session_id, db)
+    item = db.query(CartItem).filter(
+        CartItem.cart_id == cart.id,
+        CartItem.product_id == args.product_id,
+    ).first()
+    if not item:
+        raise ValueError(f"Product {args.product_id} is not in your cart.")
+    db.delete(item)
+    db.commit()
+    cart_total = _get_cart_total(cart, db)
+    cart_item_count = sum(i.quantity for i in cart.items)
+    return RemoveFromCartResult(
+        product_id=args.product_id,
+        removed=True,
+        cart_total=cart_total,
+        cart_item_count=cart_item_count,
+    )
+
+
+def _clear_cart(args: ClearCartRequest, session_id: str, db: Session) -> ClearCartResult:
+    """Remove all items from the cart."""
+    cart = _get_or_create_cart(session_id, db)
+    items_removed = len(cart.items)
+    db.query(CartItem).filter(CartItem.cart_id == cart.id).delete()
+    cart.discount_percent = 0
+    db.commit()
+    return ClearCartResult(
+        items_removed=items_removed,
+        message=f"Cart cleared. {items_removed} item(s) removed.",
+    )
+
+
 def _show_cart(args: ShowCartRequest, session_id: str, db: Session) -> CartViewResult:
     """Return current cart contents and totals."""
     cart = _get_or_create_cart(session_id, db)
@@ -321,7 +359,15 @@ def run_tool_call(
         elif tool_name == "upsell_suggest":
             args = UpsellSuggestRequest(**arguments)  # No required args
             result_data = _upsell_suggest(args, session_id, db)
-        
+
+        elif tool_name == "remove_from_cart":
+            args = RemoveFromCartRequest(**arguments)
+            result_data = _remove_from_cart(args, session_id, db)
+
+        elif tool_name == "clear_cart":
+            args = ClearCartRequest(**arguments)
+            result_data = _clear_cart(args, session_id, db)
+
         return ToolCallResult(
             status="ok",
             tool_name=tool_name,

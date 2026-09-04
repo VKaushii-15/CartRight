@@ -153,6 +153,30 @@ class ShowCatalogResult(BaseModel):
     items: List[ProductSearchResult]
 
 
+class RemoveFromCartRequest(BaseModel):
+    """Remove a specific product from the cart."""
+    product_id: int = Field(..., description="ID of the product to remove from cart")
+
+
+class RemoveFromCartResult(BaseModel):
+    """Result after removing an item from cart."""
+    product_id: int
+    removed: bool
+    cart_total: float
+    cart_item_count: int
+
+
+class ClearCartRequest(BaseModel):
+    """Remove all items from the cart."""
+    # No parameters — clears the entire session cart
+
+
+class ClearCartResult(BaseModel):
+    """Result after clearing the cart."""
+    items_removed: int
+    message: str
+
+
 # ============================================================================
 # Constants & Validation Rules
 # ============================================================================
@@ -165,6 +189,8 @@ ALLOWED_TOOLS = {
     "upsell_suggest",
     "show_cart",
     "show_catalog",
+    "remove_from_cart",
+    "clear_cart",
 }
 
 MAX_DISCOUNT_PERCENT = 20
@@ -181,4 +207,6 @@ TOOL_MODEL_BY_NAME = {
     "upsell_suggest": UpsellSuggestRequest,
     "show_cart": ShowCartRequest,
     "show_catalog": ShowCatalogRequest,
+    "remove_from_cart": RemoveFromCartRequest,
+    "clear_cart": ClearCartRequest,
 }

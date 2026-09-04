@@ -6,7 +6,6 @@ Converts tool schemas to OpenAI-compatible format and sends messages to Groq.
 
 import os
 import json
-import re
 from typing import List, Dict, Any, Optional, Tuple
 from groq import Groq
 from pydantic import BaseModel
@@ -19,8 +18,10 @@ from app.tools.schemas import (
     CheckoutRequest,
     UpsellSuggestRequest,
     ShowCartRequest,
+    ShowCatalogRequest,
+    RemoveFromCartRequest,
+    ClearCartRequest,
 )
-from app.nlu.intent import classify_intent
 
 
 # ============================================================================
@@ -36,7 +37,8 @@ else:
     # simulator to produce tool calls from user messages so unit/integration
     # tests can run without a real Groq API key.
     groq_client = None
-# Allow forcing the local simulator even if GROQ_API_KEY is present
+# Optional offline test hook left here for dedicated test scripts only.
+# Production behavior should *not* silently switch to a fake keyword simulator.
 GROQ_FORCE_SIMULATOR = os.getenv("GROQ_FORCE_SIMULATOR", "").lower() in ("1", "true", "yes")
 
 # Model choice: OSS 120B (available on Groq free tier, supports tool-calling well)
@@ -46,23 +48,28 @@ SYSTEM_PROMPT = """You are a helpful shopping assistant for an e-commerce store.
 Your job is to help users find products, add them to their cart, apply discounts, and checkout.
 
 You have access to the following tools:
-- search_catalog: Search for products by name or description
-- add_to_cart: Add a product to the user's cart (requires product_id and quantity)
-- apply_discount: Apply a discount code to the cart (0-20% only)
-- checkout: Create a Razorpay payment order for the cart
-- upsell_suggest: Suggest related products based on cart contents
+- search_catalog: Search for products by name or description keyword. Use this to find product IDs.
+- add_to_cart: Add a specific product to the user's cart. REQUIRES a product_id (integer). If the user says "add X" but you don't have the product_id yet, call search_catalog first to find it, then call add_to_cart with the correct product_id.
+- remove_from_cart: Remove a specific product from the cart. REQUIRES product_id. If you don't know the product_id, call show_cart first to see what's in the cart.
+- clear_cart: Remove ALL items from the cart at once (no parameters needed).
+- apply_discount: Apply a discount percentage to the cart (0-20% only).
+- checkout: Create a Razorpay payment order for the cart (no parameters needed).
+- upsell_suggest: Suggest related products based on cart contents (no parameters needed).
+- show_cart: View the current cart contents and totals (no parameters needed).
+- show_catalog: View the full product catalog (no parameters needed).
 
-IMPORTANT INSTRUCTIONS:
-1. Before calling any tool, reason about the user intent and required fields.
-2. If the intent is not clear or a required field is missing, ask a clarifying question instead of guessing.
-3. When a user asks to search or find products, use search_catalog with their query.
-4. When a user asks to add a product to cart, use add_to_cart with the product ID and quantity.
-5. When a user asks for a discount, use apply_discount with the discount percentage (max 20%).
-6. When a user asks to checkout or pay, use checkout (no parameters needed).
-7. When a user seems interested in more products, use upsell_suggest (no parameters needed).
-8. Always try to call the appropriate tool for user requests, not just search.
-9. If a tool is rejected, explain the reason and suggest alternatives.
-10. Be helpful and guide users through the shopping and checkout process."""
+IMPORTANT RULES:
+1. Reason about intent before calling any tool.
+2. If the user wants to add something to cart but hasn't specified a product, ask them what product they want or call search_catalog to find it — never call add_to_cart with a made-up product_id.
+3. For "add X to cart" messages, call search_catalog for X first to get the product_id, then call add_to_cart.
+4. For "remove X from cart" messages, call show_cart first if you don't know the product_id, then call remove_from_cart.
+5. For "clear cart" or "empty my cart", call clear_cart directly.
+6. If the request is ambiguous or a required field is truly missing, ask a clarifying question.
+7. When a user asks to checkout or pay, use checkout.
+8. When a user asks to view their cart or basket, use show_cart.
+9. When a user wants to browse all products, use show_catalog.
+10. If a tool is rejected, explain why and suggest alternatives.
+11. Guide users naturally through the shopping and checkout flow."""
 
 
 # ============================================================================
@@ -110,12 +117,12 @@ GROQ_TOOLS = [
     convert_pydantic_to_groq_schema(
         SearchCatalogRequest,
         "search_catalog",
-        "Search for products by name or description keyword"
+        "Search for products by name or description keyword. Returns product IDs needed for add_to_cart."
     ),
     convert_pydantic_to_groq_schema(
         AddToCartRequest,
         "add_to_cart",
-        "Add a product to the user's shopping cart by product ID"
+        "Add a product to the user's shopping cart. Requires product_id (integer) — search first if you don't have it."
     ),
     convert_pydantic_to_groq_schema(
         ApplyDiscountRequest,
@@ -132,17 +139,26 @@ GROQ_TOOLS = [
         "upsell_suggest",
         "Get product suggestions based on what's in the cart (no parameters needed)"
     ),
-        convert_pydantic_to_groq_schema(
-            ShowCartRequest,
-            "show_cart",
-            "Show the current cart contents and totals"
-        ),
-        convert_pydantic_to_groq_schema(
-            # Use SearchCatalogRequest's schema for catalog items (same shape)
-            SearchCatalogRequest,
-            "show_catalog",
-            "Show the full product catalog"
-        ),
+    convert_pydantic_to_groq_schema(
+        ShowCartRequest,
+        "show_cart",
+        "Show the current cart contents and totals (no parameters needed)"
+    ),
+    convert_pydantic_to_groq_schema(
+        ShowCatalogRequest,
+        "show_catalog",
+        "Show the full product catalog (no parameters needed)"
+    ),
+    convert_pydantic_to_groq_schema(
+        RemoveFromCartRequest,
+        "remove_from_cart",
+        "Remove a specific product from the cart by product_id. Call show_cart first if you don't know the product_id."
+    ),
+    convert_pydantic_to_groq_schema(
+        ClearCartRequest,
+        "clear_cart",
+        "Remove ALL items from the cart at once (no parameters needed)"
+    ),
 ]
 
 
@@ -181,61 +197,6 @@ def get_conversation_state(session_id: str) -> ConversationState:
 
 
 # ============================================================================
-# Intent Preflight for Tool Calling
-# ============================================================================
-
-
-def preflight_intent_decision(user_message: str) -> Dict[str, Any]:
-    """Return a safe routing decision before any tool call is made.
-
-    This creates a thought-like gate: determine intent, required entities,
-    and whether the request is clear enough to execute a tool.
-    """
-    nlu = classify_intent(user_message)
-    intent = nlu.get("intent")
-    entities = nlu.get("entities", {})
-    confidence = nlu.get("confidence", 0.0)
-    clarify = nlu.get("clarify")
-
-    if confidence < 0.6 or intent == "unknown":
-        return {
-            "intent": intent,
-            "entities": entities,
-            "confidence": confidence,
-            "should_call_tool": False,
-            "assistant_message": clarify or "Could you clarify what you want me to do?",
-        }
-
-    # Enforce a simple safety rule: if a required parameter is missing, ask for it instead
-    # of triggering a tool call with guessed values.
-    if intent == "add_to_cart" and not entities.get("product_id") and not entities.get("product_name"):
-        return {
-            "intent": intent,
-            "entities": entities,
-            "confidence": confidence,
-            "should_call_tool": False,
-            "assistant_message": "Which product would you like to add? Please provide the product name or product id.",
-        }
-
-    if intent == "apply_discount" and "discount_percent" not in entities:
-        return {
-            "intent": intent,
-            "entities": entities,
-            "confidence": confidence,
-            "should_call_tool": False,
-            "assistant_message": "What percentage discount would you like to apply?",
-        }
-
-    return {
-        "intent": intent,
-        "entities": entities,
-        "confidence": confidence,
-        "should_call_tool": True,
-        "assistant_message": "",
-    }
-
-
-# ============================================================================
 # Groq API Calling
 # ============================================================================
 
@@ -245,132 +206,99 @@ def call_groq(
     max_tokens: int = 1024,
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Send a user message to Groq with tool definitions attached.
-    Parse response for tool calls.
-    
-    Args:
-        user_message: User's natural language input
-        session_id: Session ID for conversation context
-        max_tokens: Max tokens for response
-    
-    Returns:
-        Tuple of (assistant_message, tool_calls)
-        where tool_calls is a list of dicts with 'name' and 'arguments'
+    Single-turn call to Groq. Records the user message, sends the full
+    conversation + tools, and returns (assistant_text, tool_call_list).
     """
-    
-    # Get conversation state and add user message
     conv_state = get_conversation_state(session_id)
     conv_state.add_message("user", user_message)
-    # If no real Groq client is configured, or simulator was forced,
-    # use a simple deterministic simulator for testing that maps
-    # keywords to tool calls.
-    # Preflight gating: check intent and required fields before any function call.
-    plan = preflight_intent_decision(user_message)
-    if not plan["should_call_tool"]:
-        assistant_message = plan["assistant_message"]
+
+    if groq_client is None:
+        assistant_message = (
+            "Groq is not configured in this environment. "
+            "Set GROQ_API_KEY or use a dedicated offline simulator in a test script."
+        )
         conv_state.add_message("assistant", assistant_message)
         return assistant_message, []
 
-    if groq_client is None or GROQ_FORCE_SIMULATOR:
-        intent = plan["intent"]
-        entities = plan["entities"]
-        tool_calls: List[Dict[str, Any]] = []
-
-        if intent == "greeting":
-            assistant_message = "Hello! 👋 How can I help you today? Looking for something specific, need product recommendations, or ready to add items to your cart?"
-            conv_state.add_message("assistant", assistant_message)
-            return assistant_message, []
-
-        if intent == "show_catalog":
-            tool_calls.append({"name": "show_catalog", "arguments": {}})
-            assistant_message = "Here are the items available in the store..."
-
-        elif intent == "show_cart":
-            tool_calls.append({"name": "show_cart", "arguments": {}})
-            assistant_message = "Here is your cart..."
-
-        elif intent == "search_catalog":
-            q = entities.get("query") or user_message
-            tool_calls.append({"name": "search_catalog", "arguments": {"query": q}})
-            assistant_message = f"Searching for '{q}'..."
-
-        elif intent == "add_to_cart":
-            args = {}
-            if entities.get("product_id"):
-                args["product_id"] = entities["product_id"]
-            if entities.get("quantity"):
-                args["quantity"] = entities["quantity"]
-            tool_calls.append({"name": "add_to_cart", "arguments": args})
-            assistant_message = "Adding item to cart..."
-
-        elif intent == "apply_discount":
-            pct = entities["discount_percent"]
-            tool_calls.append({"name": "apply_discount", "arguments": {"discount_percent": pct}})
-            assistant_message = f"Applying {pct}% discount..."
-
-        elif intent == "checkout":
-            tool_calls.append({"name": "checkout", "arguments": {}})
-            assistant_message = "Proceeding to checkout..."
-
-        else:
-            assistant_message = plan["assistant_message"] or "I didn't quite understand. Could you rephrase?"
-            conv_state.add_message("assistant", assistant_message)
-            return assistant_message, []
-
-        if assistant_message:
-            conv_state.add_message("assistant", assistant_message)
-
-        return assistant_message, tool_calls
-
-    # Real Groq path: keep the model, but force a planning step in the prompt.
     response = groq_client.chat.completions.create(
         model=GROQ_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT + "\n\nThink before calling a tool: first infer the user intent, then decide whether a tool is required. If intent is unclear or required parameters are missing, ask a clarifying question instead of guessing."},
-            {"role": "user", "content": f"Intent preflight: {plan['intent']} | confidence={plan['confidence']} | entities={plan['entities']}\n\nUser message: {user_message}\n\nIf the intent is unclear or parameters are missing, do not call a function; ask a question instead."},
+            {"role": "system", "content": SYSTEM_PROMPT},
         ] + conv_state.get_messages(),
         tools=GROQ_TOOLS,
         tool_choice="auto",
         max_tokens=max_tokens,
     )
 
-    # Extract response
     assistant_message = ""
     tool_calls = []
 
     for choice in response.choices:
         if choice.message.content:
             assistant_message = choice.message.content
-
-        # Check for tool calls in the response
         if choice.message.tool_calls:
             for tool_call in choice.message.tool_calls:
                 tool_calls.append({
+                    "id": tool_call.id,
                     "name": tool_call.function.name,
                     "arguments": json.loads(tool_call.function.arguments),
                 })
 
-    # Add assistant message to conversation (without tool calls for clarity)
     if assistant_message:
         conv_state.add_message("assistant", assistant_message)
 
     return assistant_message, tool_calls
 
 
-# ============================================================================
-# Simple Demo / Testing
-# ============================================================================
+def call_groq_with_tool_results(
+    tool_results: List[Dict[str, Any]],
+    session_id: str,
+    max_tokens: int = 1024,
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    After executing tool calls, feed their results back to Groq so it can
+    decide to call more tools or give a final plain-text answer.
 
-def chat_with_agent(user_message: str, session_id: str = "default") -> Dict[str, Any]:
+    tool_results is a list of dicts:
+        {"tool_call_id": str, "name": str, "content": str}
     """
-    Simplified interface for testing.
-    Returns full response including assistant message and any tool calls.
-    """
-    assistant_message, tool_calls = call_groq(user_message, session_id)
-    
-    return {
-        "user_message": user_message,
-        "assistant_message": assistant_message,
-        "tool_calls": tool_calls,
-        "tool_count": len(tool_calls),
-    }
+    conv_state = get_conversation_state(session_id)
+
+    if groq_client is None:
+        return "", []
+
+    # Build messages: system + history + tool result messages
+    tool_messages = [
+        {"role": "tool", "tool_call_id": r["tool_call_id"], "name": r["name"], "content": r["content"]}
+        for r in tool_results
+    ]
+
+    response = groq_client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+        ] + conv_state.get_messages() + tool_messages,
+        tools=GROQ_TOOLS,
+        tool_choice="auto",
+        max_tokens=max_tokens,
+    )
+
+    assistant_message = ""
+    tool_calls = []
+
+    for choice in response.choices:
+        if choice.message.content:
+            assistant_message = choice.message.content
+        if choice.message.tool_calls:
+            for tool_call in choice.message.tool_calls:
+                tool_calls.append({
+                    "id": tool_call.id,
+                    "name": tool_call.function.name,
+                    "arguments": json.loads(tool_call.function.arguments),
+                })
+
+    if assistant_message:
+        conv_state.add_message("assistant", assistant_message)
+
+    return assistant_message, tool_calls
+
