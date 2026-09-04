@@ -1,17 +1,26 @@
 import React, { useEffect, useRef, useState } from "react";
 import { genSessionId } from "../utils/session";
 import { sendChatMessage } from "../api/client";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function ChatAssistant() {
   const [sessionId] = useState(genSessionId);
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi! I'm your shopping assistant 🛍️\nTell me what you're looking for — I can search products, add items to your cart, apply discounts, and checkout for you!" }
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const saved = localStorage.getItem(`chat_history_${sessionId}`);
+    if (saved) return JSON.parse(saved);
+    return [
+      { role: "assistant", content: "Hi! I'm your shopping assistant 🛍️\nTell me what you're looking for — I can search products, add items to your cart, apply discounts, and checkout for you!" }
+    ];
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { 
+    localStorage.setItem(`chat_history_${sessionId}`, JSON.stringify(messages));
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" }); 
+  }, [messages, sessionId]);
 
   async function sendMessage() {
     const text = input.trim();
@@ -122,7 +131,11 @@ export default function ChatAssistant() {
             <div key={i} className={`bubble-row ${m.role}`}>
               {m.role === "assistant" && <div className="bubble-avatar">🤖</div>}
               <div>
-                <div className={`bubble ${m.role}`}>{m.content}</div>
+                <div className={`bubble ${m.role}`}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {m.content}
+                  </ReactMarkdown>
+                </div>
                 {m.tools && m.tools.length > 0 && (
                   <div style={{marginTop:6}}>
                     {m.tools.map((t, j) => (
