@@ -40,14 +40,14 @@ Deeply integrated with the **Razorpay SDK** (Test Mode). The agent provisions se
 
 ```mermaid
 flowchart TD
-    A([User - React Frontend]) --> B[/chat/{session_id} Endpoint]
+    A[User - React Frontend] --> B[chat session_id Endpoint]
     B --> C[Groq LLM - Tool Calling]
     C --> D
 
-    subgraph D [run_tool_call - Gate Layer]
+    subgraph D [Gate Layer - run_tool_call]
         D1[1. Whitelist Check] --> D2[2. Schema Validation - Pydantic]
         D2 --> D3[3. Business Rule Execution]
-        D3 --> D4[4. Clean Result / Rejection]
+        D3 --> D4[4. Clean Result or Rejection]
     end
 
     D --> E[Search Catalog]
@@ -56,10 +56,14 @@ flowchart TD
     D --> H[Checkout - Razorpay]
     D --> I[Upsell - suggest]
 
-    E & F & G & H & I --> DB[(PostgreSQL / SQLite Database)]
+    E --> DB[(PostgreSQL / SQLite Database)]
+    F --> DB
+    G --> DB
+    H --> DB
+    I --> DB
 
-    DB --> DB1[Products & Live Stock]
-    DB --> DB2[Cart Sessions & Totals]
+    DB --> DB1[Products and Live Stock]
+    DB --> DB2[Cart Sessions and Totals]
     DB --> DB3[Razorpay Orders]
     DB --> DB4[Message History]
 ```
