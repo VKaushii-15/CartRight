@@ -64,9 +64,12 @@ export default function ChatAssistant() {
             const total = t.result?.cart_total;
             parts.push(`Added ${qty} × product ${pid} to cart${total ? ` (cart total: ₹${total})` : ""}`);
           } else if (t.tool_name === "apply_discount") {
-            const pct = t.arguments?.discount_percent ?? t.result?.discount_percent;
+            const code = t.arguments?.code ?? t.result?.code;
+            const pct = t.result?.discount_percent;
             const cartTotal = t.result?.cart_total;
-            parts.push(`Applied ${pct}% discount${cartTotal ? ` (new total: ₹${cartTotal})` : ""}`);
+            parts.push(t.status === "ok"
+              ? `Applied code ${code} (${pct}% off)${cartTotal ? ` (new total: ₹${cartTotal})` : ""}`
+              : `Could not apply code: ${t.message}`);
           } else if (t.tool_name === "checkout") {
             const oid = t.result?.razorpay_order_id || t.result?.order_id;
             const amt = t.result?.amount;

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchProduct, addToCart } from "../api/client";
 import { genSessionId } from "../utils/session";
+import { getProductImage } from "../utils/imageMap";
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -16,6 +17,7 @@ export default function ProductDetail() {
   if (isLoading) return <div className="page-wrap"><p style={{color:"var(--muted)"}}>Loading product...</p></div>;
   if (!product)  return <div className="page-wrap"><p style={{color:"var(--muted)"}}>Product not found.</p></div>;
 
+  const imgSrc = getProductImage(product.name);
   const emojis = {"Blue Hoodie":"👕","Red T-Shirt":"👔","Black Jeans":"👖","White Sneakers":"👟","Wool Beanie":"🧢"};
   const emoji = emojis[product.name] ?? "📦";
 
@@ -29,7 +31,11 @@ export default function ProductDetail() {
   return (
     <div className="page-wrap">
       <div className="detail-grid">
-        <div className="detail-img">{emoji}</div>
+        {imgSrc ? (
+          <img src={imgSrc} alt={product.name} className="detail-img" style={{ objectFit: "cover", width: "100%" }} />
+        ) : (
+          <div className="detail-img">{emoji}</div>
+        )}
         <div className="detail-body">
           <h2>{product.name}</h2>
           <p className="detail-desc">{product.description}</p>

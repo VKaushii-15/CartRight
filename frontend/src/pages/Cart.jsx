@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCart, applyDiscount } from "../api/client";
 import { Link } from "react-router-dom";
 import { genSessionId } from "../utils/session";
+import { getProductImage } from "../utils/imageMap";
 
 export default function CartPage() {
   const qc = useQueryClient();
@@ -47,16 +48,22 @@ export default function CartPage() {
       <p className="page-sub">{items.length} item{items.length !== 1 ? "s" : ""} in your bag</p>
       <div className="cart-layout">
         <div className="card">
-          {items.map((it, i) => (
+          {items.map((it, i) => {
+            const imgSrc = getProductImage(it.name);
+            return (
             <div key={i} className="cart-item">
-              <div className="cart-item-emoji">{emojis[it.name] ?? "📦"}</div>
+              {imgSrc ? (
+                <img src={imgSrc} alt={it.name} className="cart-item-emoji" style={{ objectFit: "cover", width: 48, height: 48, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }} />
+              ) : (
+                <div className="cart-item-emoji">{emojis[it.name] ?? "📦"}</div>
+              )}
               <div className="cart-item-info">
                 <div className="cart-item-name">{it.name}</div>
                 <div className="cart-item-price">₹{it.price} × {it.quantity}</div>
               </div>
               <div className="cart-item-total">₹{(it.price * it.quantity).toFixed(2)}</div>
             </div>
-          ))}
+          )})}
         </div>
 
         <div className="card summary-card">

@@ -35,7 +35,7 @@ from app.tools.schemas import (
     ClearCartRequest,
     ClearCartResult,
 )
-from app.models import Cart, CartItem, Product, Order
+from app.models import Cart, CartItem, Product, Order, DiscountCode
 from app.razorpay_client import create_order, RAZORPAY_KEY_ID
 
 
@@ -132,19 +132,29 @@ def _add_to_cart(args: AddToCartRequest, session_id: str, db: Session) -> AddToC
 
 
 def _apply_discount(args: ApplyDiscountRequest, session_id: str, db: Session) -> ApplyDiscountResult:
-    """Apply discount to cart."""
-    # Schema validation already enforced discount_percent <= 20
-    # This just applies it to the cart
+    """Apply discount code to cart."""
+    discount_record = db.query(DiscountCode).filter(DiscountCode.code.ilike(args.code)).first()
+
+    if not discount_record:
+        raise ValueError(f"Discount code '{args.code}' is invalid or does not exist.")
+
+    if discount_record.is_used:
+        raise ValueError(f"Discount code '{args.code}' has already been used and is single-use only.")
+
     cart = _get_or_create_cart(session_id, db)
-    cart.discount_percent = args.discount_percent
+    
+    # Mark the code as used in the database so it's a one-time thing
+    discount_record.is_used = True
+    cart.discount_percent = discount_record.discount_percent
     db.commit()
     
     cart_subtotal = _get_cart_total(cart, db)
-    discount_amount = (cart_subtotal * args.discount_percent) / 100.0
+    discount_amount = (cart_subtotal * cart.discount_percent) / 100.0
     cart_total = cart_subtotal - discount_amount
     
     return ApplyDiscountResult(
-        discount_percent=args.discount_percent,
+        code=discount_record.code,
+        discount_percent=cart.discount_percent,
         cart_subtotal=cart_subtotal,
         discount_amount=discount_amount,
         cart_total=cart_total,

@@ -25,14 +25,11 @@ class AddToCartRequest(BaseModel):
 
 
 class ApplyDiscountRequest(BaseModel):
-    """Apply a discount percentage to the cart."""
-    discount_percent: int = Field(
+    """Apply a discount code to the cart."""
+    code: str = Field(
         ...,
-        ge=0,
-        le=20,
-        description="Discount percentage (0–20% capped by policy)"
+        description="The discount code string provided by the user"
     )
-
 
 class CheckoutRequest(BaseModel):
     """Create a Razorpay order for the current cart."""
@@ -101,11 +98,11 @@ class AddToCartResult(BaseModel):
 
 class ApplyDiscountResult(BaseModel):
     """Result after applying discount."""
+    code: str
     discount_percent: int
     cart_subtotal: float
     discount_amount: float
     cart_total: float
-
 
 class CheckoutResult(BaseModel):
     """Result of successful checkout (Razorpay order created)."""

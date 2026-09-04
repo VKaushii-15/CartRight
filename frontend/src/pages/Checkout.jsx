@@ -11,13 +11,16 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false);
   const [orderId, setOrderId] = useState(null);
   const [error, setError] = useState(null);
+  const [receipt, setReceipt] = useState(null);
 
   async function handleCheckout() {
     setLoading(true); setError(null);
     try {
+      const currentCart = qc.getQueryData(["cart", sessionId]);
       const res = await checkout(sessionId);
       if (res?.razorpay_order_id) {
         setOrderId(res.razorpay_order_id);
+        if (currentCart) setReceipt(currentCart);
         qc.invalidateQueries(["cart", sessionId]);
       } else {
         setError(res?.message || "Checkout failed — cart may be empty.");
@@ -31,12 +34,34 @@ export default function Checkout() {
 
   if (orderId) return (
     <div className="page-wrap">
-      <div className="card order-confirm">
+      <div className="card order-confirm" style={{ padding: "48px 24px", maxWidth: 600, margin: "0 auto" }}>
         <div className="confirm-icon">🎉</div>
         <h2>Order Placed!</h2>
         <p>Your Razorpay test-mode order was created successfully.</p>
         <div className="order-id">Order ID: {orderId}</div>
-        <Link to="/" className="btn btn-primary">Continue Shopping</Link>
+
+        {receipt && (
+          <div style={{ textAlign: "left", background: "var(--card2)", padding: 24, borderRadius: "var(--radius)", margin: "24px 0" }}>
+            <h3 style={{ marginTop: 0, marginBottom: 16 }}>Receipt</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {receipt.items.map((it, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: "1px solid var(--border)" }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{it.name}</div>
+                    <div style={{ fontSize: 13, color: "var(--text-sm)" }}>Qty: {it.quantity}</div>
+                  </div>
+                  <div style={{ fontWeight: 700 }}>₹{(it.price * it.quantity).toFixed(2)}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, fontSize: 18, fontWeight: 800 }}>
+              <span>Total Paid</span>
+              <span style={{ color: "var(--accent)" }}>₹{receipt.total.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+
+        <Link to="/" className="btn btn-primary" style={{ width: "100%" }}>Continue Shopping</Link>
       </div>
     </div>
   );

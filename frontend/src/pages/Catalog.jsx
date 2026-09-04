@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCatalog } from "../api/client";
 import { Link } from "react-router-dom";
+import { getProductImage } from "../utils/imageMap";
 
 const emojis = {"Blue Hoodie":"👕","Red T-Shirt":"👔","Black Jeans":"👖","White Sneakers":"👟","Wool Beanie":"🧢"};
 
@@ -52,9 +53,20 @@ export default function Catalog() {
       )}
 
       <div className="product-grid">
-        {products.map(p => (
+        {products.map(p => {
+          const imgSrc = getProductImage(p.name);
+          return (
           <div key={p.id} className="card product-card">
-            <div className="product-img">{emojis[p.name] ?? "📦"}</div>
+            {imgSrc ? (
+              <img 
+                src={imgSrc} 
+                alt={p.name} 
+                className="product-img" 
+                style={{ objectFit: "cover", width: "100%", height: 190 }} 
+              />
+            ) : (
+              <div className="product-img">{emojis[p.name] ?? "📦"}</div>
+            )}
             <div className="product-body">
               <div className="product-name">{p.name}</div>
               <div className="product-desc">{p.description}</div>
@@ -67,7 +79,8 @@ export default function Catalog() {
               <Link to={`/product/${p.id}`} className="btn btn-primary" style={{marginTop:14,width:"100%"}}>View Product</Link>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

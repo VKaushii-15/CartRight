@@ -16,6 +16,28 @@ def classify_intent(text: str) -> Dict[str, Any]:
     if re.match(r'^(hi|hello|hey|hey there|hi there|good morning|good evening|good afternoon)\b', t):
         return {"intent": "greeting", "entities": {}, "confidence": 0.99}
 
+    # discount must check before add_to_cart to parse "I want to apply discount code" correctly
+    m_pct = re.search(r"(\d{1,2})\s*(?:%|percent|percentage)", t)
+    # look for a specific code
+    m_code = re.search(r"(?:code|promo|voucher)\s+([a-zA-Z0-9\-]+)", t)
+    
+    if "discount" in t or "code" in t or "promo" in t or m_pct or "offer" in t:
+        entities = {}
+        if m_code:
+            entities["code"] = m_code.group(1).upper()
+        elif m_pct:
+            # Maybe the user didn't mention the code but asked for a %. Let them be clarified by system
+            entities["discount_percent"] = int(m_pct.group(1))
+
+        # Check for standalone single-use code pattern "SAVE10" "MYSTERY-XXX"
+        if not m_code:
+            words = t.split()
+            for w in words:
+                if w.upper() in ["SAVE10", "PROMO15", "CART20", "WELCOME25", "FLASH30"] or w.upper().startswith("MYSTERY-"):
+                    entities["code"] = w.upper()
+
+        return {"intent": "apply_discount", "entities": entities, "confidence": 0.9}
+
     # add to cart / buy / purchase must win before generic cart-view checks
     if any(k in t for k in ("add ", "add to cart", "add to my cart", "buy ", "purchase ", "get me ", "put in cart", "put it in cart", "i want ")):
         entities = {}
@@ -65,20 +87,7 @@ def classify_intent(text: str) -> Dict[str, Any]:
     if any(kw in t for kw in ("checkout", "pay", "go ahead and checkout", "place order", "complete my purchase", "pay now")):
         return {"intent": "checkout", "entities": {}, "confidence": 0.95}
 
-    # discount
-    m_pct = re.search(r"(\d{1,2})\s*(?:%|percent|percentage)", t)
-    if "discount" in t or m_pct or "offer" in t:
-        entities = {}
-        if m_pct:
-            entities["discount_percent"] = int(m_pct.group(1))
-        return {"intent": "apply_discount", "entities": entities, "confidence": 0.9}
-
     # search catalog
-    if any(k in t for k in ("find ", "search ", "look for ", "looking for ", "find me ", "need ", "want " )):
-        query = text.strip()
-        return {"intent": "search_catalog", "entities": {"query": query}, "confidence": 0.8}
-
-    # short natural queries often mean catalog search
     if len(t.split()) <= 6 and any(w in t for w in ("hoodie", "t-shirt", "shirt", "jeans", "sneaker", "beanie", "hat", "jacket", "product", "item")):
         return {"intent": "search_catalog", "entities": {"query": text}, "confidence": 0.75}
 

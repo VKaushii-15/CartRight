@@ -52,7 +52,7 @@ You have access to the following tools:
 - add_to_cart: Add a specific product to the user's cart. REQUIRES a product_id (integer). If the user says "add X" but you don't have the product_id yet, call search_catalog first to find it, then call add_to_cart with the correct product_id.
 - remove_from_cart: Remove a specific product from the cart. REQUIRES product_id. If you don't know the product_id, call show_cart first to see what's in the cart.
 - clear_cart: Remove ALL items from the cart at once (no parameters needed).
-- apply_discount: Apply a discount percentage to the cart (0-20% only).
+- apply_discount: Apply a specific discount code provided by the user. REQUIRES a 'code' (string). 
 - checkout: Create a Razorpay payment order for the cart (no parameters needed).
 - upsell_suggest: Suggest related products based on cart contents (no parameters needed).
 - show_cart: View the current cart contents and totals (no parameters needed).
@@ -64,12 +64,13 @@ IMPORTANT RULES:
 3. For "add X to cart" messages, call search_catalog for X first to get the product_id, then call add_to_cart.
 4. For "remove X from cart" messages, call show_cart first if you don't know the product_id, then call remove_from_cart.
 5. For "clear cart" or "empty my cart", call clear_cart directly.
-6. If the request is ambiguous or a required field is truly missing, ask a clarifying question.
-7. When a user asks to checkout or pay, use checkout.
-8. When a user asks to view their cart or basket, use show_cart.
-9. When a user wants to browse all products, use show_catalog.
-10. If a tool is rejected, explain why and suggest alternatives.
-11. Guide users naturally through the shopping and checkout flow."""
+6. For "apply discount", if the user hasn't provided a valid discount code string, ask them for the code. Do not invent a code.
+7. If the request is ambiguous or a required field is truly missing, ask a clarifying question.
+8. When a user asks to checkout or pay, use checkout.
+9. When a user asks to view their cart or basket, use show_cart.
+10. When a user wants to browse all products, use show_catalog.
+11. If a tool is rejected, explain why and suggest alternatives.
+12. Guide users naturally through the shopping and checkout flow."""
 
 
 # ============================================================================
@@ -127,7 +128,7 @@ GROQ_TOOLS = [
     convert_pydantic_to_groq_schema(
         ApplyDiscountRequest,
         "apply_discount",
-        "Apply a discount percentage to the cart (0-20% only, policy enforced)"
+        "Apply a specific discount code to the cart. Requires 'code' (string)."
     ),
     convert_pydantic_to_groq_schema(
         CheckoutRequest,

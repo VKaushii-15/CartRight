@@ -32,7 +32,7 @@ export async function applyDiscount(sessionId, discount_percent) {
 }
 
 export async function checkout(sessionId) {
-  const res = await api.post(`/checkout/${sessionId}`);
+  const res = await api.post(`/cart/${sessionId}/checkout`);
   return res.data;
 }
 
