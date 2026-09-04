@@ -1,4 +1,14 @@
-# 🛒 CartRight: Conversational Checkout Agent
+# CartRight: Conversational Checkout Agent
+
+## Tech Stack
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
+![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white)
+![Groq](https://img.shields.io/badge/Groq-API-orange?style=for-the-badge)
+![Razorpay](https://img.shields.io/badge/Razorpay-02042B?style=for-the-badge&logo=razorpay&logoColor=white)
 
 **CartRight** is an intelligent, LLM-powered ecommerce checkout assistant featuring a robust business-logic gate layer and seamless Razorpay payment integration. 
 
@@ -6,7 +16,7 @@ Built for our hackathon submission, this project demonstrates a highly secure, r
 
 ---
 
-## ✨ Features & Innovations
+## Features & Innovations
 
 ### 1. The Gate Layer (Core Innovation)
 LLMs are prone to hallucinations. We built a robust validation layer that sits between the LLM and the backend. Every tool call is:
@@ -26,53 +36,37 @@ Deeply integrated with the **Razorpay SDK** (Test Mode). The agent provisions se
 
 ---
 
-## 🏗 Architecture Highlights
+## Architecture Highlights
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                      USER (React Frontend)                  │
-└────────────────────────┬────────────────────────────────────┘
-                         │ 
-                         ↓ 
-         ┌───────────────────────────────┐
-         │  /chat/{session_id} Endpoint  │
-         └────────────┬──────────────────┘
-                      │
-                      ↓
-         ┌───────────────────────────────┐
-         │   Groq LLM (Tool-Calling)     │
-         └────────────┬──────────────────┘
-                      │
-                      ↓
-         ┌───────────────────────────────────────┐
-         │      run_tool_call() Gate Layer       │
-         │ ┌─────────────────────────────────┐   │
-         │ │ 1. Whitelist Check              │   │
-         │ │ 2. Schema Validation (Pydantic) │   │
-         │ │ 3. Business Rule Execution      │   │
-         │ │ 4. Clean Result/Rejection       │   │
-         │ └─────────────────────────────────┘   │
-         └────────────┬──────────────────────────┘
-                      │
-         ┌────────────┼────────────┬──────────────┬──────────┐
-         ↓            ↓            ↓              ↓          ↓
-     Search      AddToCart    Discount       Checkout    Upsell
-     Catalog      (valid)      (gated)       (Razorpay)  (suggest)
-         │            │            │              │          │
-         └────────────┼────────────┴──────────────┴──────────┘
-                      ↓
-         ┌─────────────────────────────────┐
-         │  PostgreSQL / SQLite Database   │
-         │  • Products & Live Stock        │
-         │  • Cart Sessions & Totals       │
-         │  • Razorpay Orders              │
-         │  • Message History              │
-         └─────────────────────────────────┘
+```mermaid
+flowchart TD
+    A([User - React Frontend]) --> B[/chat/{session_id} Endpoint]
+    B --> C[Groq LLM - Tool Calling]
+    C --> D
+
+    subgraph D [run_tool_call - Gate Layer]
+        D1[1. Whitelist Check] --> D2[2. Schema Validation - Pydantic]
+        D2 --> D3[3. Business Rule Execution]
+        D3 --> D4[4. Clean Result / Rejection]
+    end
+
+    D --> E[Search Catalog]
+    D --> F[AddToCart]
+    D --> G[Discount - gated]
+    D --> H[Checkout - Razorpay]
+    D --> I[Upsell - suggest]
+
+    E & F & G & H & I --> DB[(PostgreSQL / SQLite Database)]
+
+    DB --> DB1[Products & Live Stock]
+    DB --> DB2[Cart Sessions & Totals]
+    DB --> DB3[Razorpay Orders]
+    DB --> DB4[Message History]
 ```
 
 ---
 
-## 🚀 Quick Start — Local Development
+## Quick Start — Local Development
 
 ### Prerequisites
 1. Python 3.10+
@@ -136,13 +130,3 @@ python3 test_chat.py
 ```
 
 ---
-
-## 🏆 Hackathon Submission Checklist (Judging Criteria)
-
-1. **Practical Application**: ✅ E-commerce checkout process fully implemented with a sleek UI.
-2. **AI Integration**: ✅ Uses Groq LLM tool-calling safely behind a strict rule gate.
-3. **Guardrails & Security**: ✅ Discounts strictly capped (e.g. 20%), preventing hallucinated price drops. 
-4. **Third-Party Integrations**: ✅ End-to-end Razorpay payment checkout built-in.
-5. **State Awareness**: ✅ Session-based carts & chat history for memory context.
-
-**Built with**: React, Vite, Python, FastAPI, SQLite/PostgreSQL, SQLAlchemy, Pydantic, Groq API, Razorpay SDK.

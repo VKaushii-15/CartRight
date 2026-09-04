@@ -173,9 +173,13 @@ class ConversationState:
     def __init__(self):
         self.messages: List[Dict[str, str]] = []
     
-    def add_message(self, role: str, content: str):
+    def add_message(self, role: str, content: str = None, **kwargs):
         """Add a message to the conversation."""
-        self.messages.append({"role": role, "content": content})
+        msg = {"role": role}
+        if content is not None:
+            msg["content"] = content
+        msg.update(kwargs)
+        self.messages.append(msg)
     
     def get_messages(self) -> List[Dict[str, str]]:
         """Get all messages in the conversation."""
@@ -245,8 +249,21 @@ def call_groq(
                     "arguments": json.loads(tool_call.function.arguments),
                 })
 
-    if assistant_message:
-        conv_state.add_message("assistant", assistant_message)
+    if assistant_message or tool_calls:
+        api_tool_calls = []
+        for tc in tool_calls:
+            api_tool_calls.append({
+                "id": tc["id"],
+                "type": "function",
+                "function": {
+                    "name": tc["name"],
+                    "arguments": json.dumps(tc["arguments"])
+                }
+            })
+        kwargs = {}
+        if tool_calls:
+            kwargs["tool_calls"] = api_tool_calls
+        conv_state.add_message("assistant", assistant_message if assistant_message else None, **kwargs)
 
     return assistant_message, tool_calls
 
@@ -273,12 +290,15 @@ def call_groq_with_tool_results(
         {"role": "tool", "tool_call_id": r["tool_call_id"], "name": r["name"], "content": r["content"]}
         for r in tool_results
     ]
+    
+    for tm in tool_messages:
+        conv_state.messages.append(tm)
 
     response = groq_client.chat.completions.create(
         model=GROQ_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-        ] + conv_state.get_messages() + tool_messages,
+        ] + conv_state.get_messages(),
         tools=GROQ_TOOLS,
         tool_choice="auto",
         max_tokens=max_tokens,
@@ -298,8 +318,21 @@ def call_groq_with_tool_results(
                     "arguments": json.loads(tool_call.function.arguments),
                 })
 
-    if assistant_message:
-        conv_state.add_message("assistant", assistant_message)
+    if assistant_message or tool_calls:
+        api_tool_calls = []
+        for tc in tool_calls:
+            api_tool_calls.append({
+                "id": tc["id"],
+                "type": "function",
+                "function": {
+                    "name": tc["name"],
+                    "arguments": json.dumps(tc["arguments"])
+                }
+            })
+        kwargs = {}
+        if tool_calls:
+            kwargs["tool_calls"] = api_tool_calls
+        conv_state.add_message("assistant", assistant_message if assistant_message else None, **kwargs)
 
     return assistant_message, tool_calls
 
